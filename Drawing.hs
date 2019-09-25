@@ -2,7 +2,7 @@
 
 module CLIPG.Drawing (
    horizontal, vertical, up, down, left, right,
-   (&), curve, heavy, double
+   Draw(..), (&), curve, heavy, double, overlay
 ) where
 
 import Data.Bimap (Bimap, (!), (!>))
@@ -13,6 +13,24 @@ import qualified Data.Set as Set
 import Control.Applicative ((<|>))
 import Data.List ((\\))
 import Data.Maybe (fromJust)
+
+moduleName = "CLIPG.Drawing"
+
+class Draw a where
+   build  :: a -> [String]
+   draw   :: a -> String
+   render :: a -> IO ()
+   draw   = unlines . build
+   render = putStr . draw
+
+
+errInvalidChar :: String -> Char -> a
+errInvalidChar f c = errorWithoutStackTrace
+   (moduleName ++ "." ++ f ++ ": Invalid character: " ++ [c])
+
+errInvalidChars :: String -> Char -> Char -> a
+errInvalidChars f x y = errorWithoutStackTrace
+   (moduleName ++ "." ++ f ++ ": Invalid character combination: " ++ [x] ++ " and " ++ [y])
 
    
 horizontal = '─'
@@ -28,44 +46,51 @@ dbR = '\10003'
 dbD = '\10004'
 
 
+data Direction = L | U | R | D
+   deriving (Eq, Ord, Enum, Bounded)
+
+direction :: Char -> Direction
+direction c = case lookup c mapping of
+   Just dir -> dir
+   Nothing  -> errInvalidChar "direction" c
+   where
+   base = [(left, L), (up, U), (right, R), (down, D)]
+   mapping = base >>= \(a,b) -> [(a, b), (heavy a, b), (double a, b)]
+
+
 (?:) :: Ord a => a -> (a,a) -> Bool
 x ?: (a,b) = a <= x && x <= b
 
 (?<) :: (Ord a, Foldable t) => t a -> (a,a) -> Bool
 xs ?< (a,b) = all (?: (a,b)) xs
 
-errInvalidChars x y = errorWithoutStackTrace
-   ("Invalid character combination: " ++ [x] ++ " and " ++ [y])
-
 
 -- curve down left = '╮'
-curve :: Char -> Char -> Char
-curve x y = case (x,y) of
-   ('╴','╵') -> '╯'
-   ('╴','╷') -> '╮'
-   ('╵','╶') -> '╰'
-   ('╷','╶') -> '╭'
-   ('╵','╴') -> '╯'
-   ('╷','╴') -> '╮'
-   ('╶','╵') -> '╰'
-   ('╶','╷') -> '╭'
-   _ -> errInvalidChars x y
+curve :: Char -> Char
+curve = \case
+   '┌' -> '╭'
+   '┐' -> '╮'
+   '└' -> '╰'
+   '┘' -> '╯'
+   chr -> errInvalidChar "curve" chr
 
 
 (&) :: Char -> Char -> Char
 x & y | x == y = x
-x & y = (\z -> if null z then errInvalidChars x y else fromJust z) $ do
-   xs <- Bimap.lookup x atoms
-   ys <- Bimap.lookup y atoms
-   let zs = Set.union xs ys
-   Bimap.lookupR zs atoms
-   
--- dbD & left
--- = (\z -> if null z then errInvalidChars dbD left else fromJust z) $ do
-   -- xs <- Bimap.lookup dbD atoms
-   -- ys = Set.singleton left
-   -- let zs = Set.union xs ys
-   -- Bimap.lookupR zs atoms
+x & y = if null z
+   then errInvalidChars "&" x y
+   else fromJust z
+   where z = (sequence $ atoms <$> [x,y]) >>= fromAtoms . Set.unions
+
+
+overlay :: Char -> Char -> Char
+overlay ' ' y = y
+overlay x y = if null z
+   then errInvalidChars "overlay" x y
+   else fromJust z
+   where
+   z = (sequence $ atoms <$> [x,y]) >>= \[xs,ys] -> fromAtoms . Set.union xs $
+      Set.filter (flip Set.notMember (Set.map direction xs) . direction) ys
 
 
 heavy :: Char -> Char
@@ -91,6 +116,7 @@ heavy c
    | c?:('┬','┳') || c?:('╤','╦') = '┳'
    | c?:('┴','┻') || c?:('╧','╩') = '┻'
    | c?:('┼','╋') || c?:('╪','╬') = '╋'
+   | otherwise = errInvalidChar "heavy" c
 
 double :: Char -> Char
 double c
@@ -109,9 +135,16 @@ double c
    | c?:('┬','┳') || c?:('╤','╦') = '╦'
    | c?:('┴','┻') || c?:('╧','╩') = '╩'
    | c?:('┼','╋') || c?:('╪','╬') = '╬'
+   | otherwise = errInvalidChar "double" c
 
-atoms :: Bimap Char (Set Char)
-atoms = Bimap.fromList list
+atoms :: Char -> Maybe (Set Char)
+atoms = (`Bimap.lookup` atomMap)
+
+fromAtoms :: Set Char -> Maybe Char
+fromAtoms = (`Bimap.lookupR` atomMap)
+
+atomMap :: Bimap Char (Set Char)
+atomMap = Bimap.fromList list
    where
    list = [(c, Set.singleton c) | c <- ['╴'..'╻'] ++ [dbL,dbU,dbR,dbD]]
       ++ [(c, atoms' c) | c <- "─━│┃╼╽╾╿" ++ (['┌'..'╬'] \\ "╌╍╎╏")]
@@ -223,3 +256,4 @@ atoms = Bimap.fromList list
       '╪' -> [double left, up, double right, down]
       '╫' -> [left, double up, right, double down]
       '╬' -> [double left, double up, double right, double down]
+      chr -> errInvalidChar "atoms" chr
