@@ -8,11 +8,6 @@ import AbLib.Data.Stack
 import Data.Map (Map)
 import qualified Data.Map as Map
 
-data Grid = Grid
-   { width :: Int
-   , height :: Int
-   , grid :: Map (Int,Int) Pile }
-
 type Pile = Stack Card'
 
 instance Draw Pile where

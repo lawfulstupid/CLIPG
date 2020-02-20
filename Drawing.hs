@@ -2,7 +2,7 @@
 
 module CLIPG.Drawing (
    horizontal, vertical, up, down, left, right,
-   Draw(..), (&), curve, heavy, double, overlay
+   Render(..), (&), curve, heavy, double, overlay
 ) where
 
 import Data.Bimap (Bimap, (!), (!>))
@@ -16,12 +16,10 @@ import Data.Maybe (fromJust)
 
 moduleName = "CLIPG.Drawing"
 
-class Draw a where
+class Render a where
    build  :: a -> [String]
-   draw   :: a -> String
    render :: a -> IO ()
-   draw   = unlines . build
-   render = putStr . draw
+   render = putStr . unlines . build
 
 
 errInvalidChar :: String -> Char -> a
@@ -95,6 +93,7 @@ overlay x y = if null z
 
 heavy :: Char -> Char
 heavy c
+   | c == ' ' = c
    | c?:('─','━') || c=='╼' || c=='╾' = '━'
    | c?:('│','┃') || c=='╽' || c=='╿' = '┃'
    | c?:('╌','╍') = '╍'
@@ -120,6 +119,7 @@ heavy c
 
 double :: Char -> Char
 double c
+   | c == ' ' = c
    | c?:('─','━') || c=='╼' || c=='╾' = '═'
    | c?:('│','┃') || c=='╽' || c=='╿' = '║'
    | c `elem` "╵╹" = dbU

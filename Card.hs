@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Cards.Card where
+module CLIPG.Card where
+
+import CLIPG.Drawing
 
 data Face = Ace | Two | Three | Four | Five | Six
    | Seven | Eight | Nine | Ten | Jack | Queen | King
@@ -24,15 +26,8 @@ cardToLines f s =
 -- │ A │
 -- │ ♠ │
 -- └───┘
-      
-class Draw a where
-   build  :: a -> [String]
-   draw   :: a -> String
-   render :: a -> IO ()
-   draw   = unlines . build
-   render = putStr . draw
 
-instance Draw Card where
+instance Render Card where
    build Joker = cardToLines '?' '¿'
    build (f `Of` s) = cardToLines (drawFace f) (drawSuit s)
       where
@@ -51,7 +46,11 @@ instance Draw Card where
 
 data Card' = FaceDn Card | FaceUp Card
 
-instance Draw Card' where
+flipCard :: Card' -> Card'
+flipCard (FaceDn card) = FaceUp card
+flipCard (FaceUp card) = FaceDn card
+
+instance Render Card' where
    build (FaceUp c) = build c
    build (FaceDn _) =
       [ "┌┬─┬┐"
